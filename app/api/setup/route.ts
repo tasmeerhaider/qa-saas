@@ -1,41 +1,45 @@
 import { NextResponse } from 'next/server';
-import { App } from 'octokit';
-
-const githubApp = new App({
-  appId: process.env.GITHUB_APP_ID!,
-  privateKey: process.env.GITHUB_APP_PRIVATE_KEY!,
-});
-
-// Helper function to check if a file exists and get its SHA
-async function getFileSha(octokit: any, owner: string, repo: string, path: string) {
-  try {
-    const { data } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-      owner,
-      repo,
-      path,
-    });
-    return data.sha;
-  } catch (error: any) {
-    if (error.status === 404) return undefined; // File doesn't exist, which is fine
-    throw error;
-  }
-}
 
 export async function POST(request: Request) {
   try {
-    const { repoOwner, repoName, installationId } = await request.json();
-    const octokit = await githubApp.getInstallationOctokit(installationId);
+    const body = await request.json();
+    const { repoOwner, repoName, targetUrl, checks } = body;
 
-    const testFileContent = `
-import { test, expect } from '@playwright/test';
+    if (!repoOwner || !repoName || !targetUrl) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
 
-test('Critical Flow Check', async ({ page }) => {
-  // We use an absolute URL so GitHub's cloud runner knows exactly where to go
-  await page.goto('https://tasmeerhaider.github.io/portfolio/');
-  await expect(page).toHaveTitle(/My awesome portfolio/);
-});
-    `;
+    // 1. BUILD THE PLAYWRIGHT SCRIPT
+    let dynamicPlaywrightCode = "import { test, expect } from '@playwright/test';\n\n";
+    dynamicPlaywrightCode += "test('Dynamic QA Automated Scan', async ({ page }) => {\n";
+    
+    if (checks.consoleErrorCheck?.enabled) {
+      dynamicPlaywrightCode += "  // Catch any JavaScript console errors\n";
+      dynamicPlaywrightCode += "  page.on('pageerror', exception => { throw new Error(`Console Error Found: ${exception}`); });\n\n";
+    }
+    
+    if (checks.brokenImageCheck?.enabled) {
+      dynamicPlaywrightCode += "  // Catch broken assets (404s, 500s)\n";
+      dynamicPlaywrightCode += "  page.on('response', res => { \n";
+      dynamicPlaywrightCode += "    if(res.status() >= 400) throw new Error(`Network Error: ${res.url()} failed with status ${res.status()}`);\n";
+      dynamicPlaywrightCode += "  });\n\n";
+    }
 
+    if (checks.mobileCheck?.enabled) {
+      dynamicPlaywrightCode += `  // Emulate mobile device screen\n`;
+      dynamicPlaywrightCode += `  await page.setViewportSize({ width: ${checks.mobileCheck.width}, height: ${checks.mobileCheck.height} });\n\n`;
+    }
+
+    dynamicPlaywrightCode += `  await page.goto('${targetUrl}');\n\n`;
+
+    if (checks.titleCheck?.enabled && checks.titleCheck.expectedTitle) {
+      dynamicPlaywrightCode += `  // Verify the exact page title\n`;
+      dynamicPlaywrightCode += `  await expect(page).toHaveTitle('${checks.titleCheck.expectedTitle}');\n`;
+    }
+
+    dynamicPlaywrightCode += "});\n";
+
+    // 2. BUILD THE YAML FILE
     const yamlContent = `
 name: QA SaaS Runner
 on: [push, pull_request]
@@ -53,54 +57,70 @@ jobs:
       - name: Record Start Time
         run: echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
       
-      # 2. Run the actual test
-      - run: npx playwright test
+      - run: npx playwright test tests/saas.spec.ts
         
-# 3. If it passes, stop the watch, calculate the difference, and send it
       - name: Report Success
         if: success()
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))s
-          curl -X POST -H "Content-Type: application/json" -d '{"repo":"${repoOwner}/${repoName}", "status":"passed", "executionTime":"'$DURATION'", "logUrl":"https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}"}' https://till-unpledged-half.ngrok-free.dev/api/webhook
+          curl -X POST -H "Content-Type: application/json" -d '{"repo":"${repoOwner}/${repoName}", "status":"passed", "executionTime":"'$DURATION'", "logUrl":"https://github.com/\\${{ github.repository }}/actions/runs/\\${{ github.run_id }}"}' https://till-unpledged-half.ngrok-free.dev/api/webhook
 
-      # 4. If it fails, stop the watch, calculate the difference, and send it
       - name: Report Failure
         if: failure()
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))s
-          curl -X POST -H "Content-Type: application/json" -d '{"repo":"${repoOwner}/${repoName}", "status":"failed", "executionTime":"'$DURATION'", "logUrl":"https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}"}' https://till-unpledged-half.ngrok-free.dev/api/webhook
+          curl -X POST -H "Content-Type: application/json" -d '{"repo":"${repoOwner}/${repoName}", "status":"failed", "executionTime":"'$DURATION'", "logUrl":"https://github.com/\\${{ github.repository }}/actions/runs/\\${{ github.run_id }}"}' https://till-unpledged-half.ngrok-free.dev/api/webhook
     `;
 
-    // 1. Get SHAs if the files already exist
-    const testSha = await getFileSha(octokit, repoOwner, repoName, 'tests/saas.spec.ts');
-    const yamlSha = await getFileSha(octokit, repoOwner, repoName, '.github/workflows/qa-saas.yml');
+    // 3. PUSH TO GITHUB (Using safe string concatenation!)
+    const pushToGitHub = async (path: string, content: string) => {
+      const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN; 
+      
+      // Using bulletproof double quotes and '+' to prevent parsing errors
+      const url = "https://api.github.com/repos/" + repoOwner + "/" + repoName + "/contents/" + path;
+      
+      let sha = "";
+      const checkRes = await fetch(url, { 
+        headers: { Authorization: "Bearer " + token } 
+      });
+      
+      if (checkRes.ok) {
+        const fileData = await checkRes.json();
+        sha = fileData.sha;
+      }
 
-    // 2. Push the Playwright file (Include SHA if it exists)
-    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
-      owner: repoOwner,
-      repo: repoName,
-      path: 'tests/saas.spec.ts',
-      message: 'Setup QA SaaS Testing',
-      content: Buffer.from(testFileContent).toString('base64'),
-      ...(testSha && { sha: testSha }),
-    });
+      const base64Content = Buffer.from(content).toString("base64");
 
-    // 3. Push the YAML file (Include SHA if it exists)
-    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
-      owner: repoOwner,
-      repo: repoName,
-      path: '.github/workflows/qa-saas.yml',
-      message: 'Setup QA SaaS Pipeline',
-      content: Buffer.from(yamlContent).toString('base64'),
-      ...(yamlSha && { sha: yamlSha }),
-    });
+      const bodyData: any = {
+        message: "Automated QA Code Injection",
+        content: base64Content,
+      };
+      if (sha) bodyData.sha = sha;
 
-    return NextResponse.json({ success: true });
+      const pushRes = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bodyData),
+      });
+
+      if (!pushRes.ok) {
+        throw new Error("GitHub API failed for " + path);
+      }
+    };
+
+    // 4. EXECUTE UPLOADS
+    await pushToGitHub(".github/workflows/qa-saas.yml", yamlContent);
+    await pushToGitHub("tests/saas.spec.ts", dynamicPlaywrightCode);
+
+    return NextResponse.json({ success: true, message: "Pipeline injected successfully!" });
 
   } catch (error) {
-    console.error("Failed to setup repository:", error);
-    return NextResponse.json({ success: false, error: "Failed to setup repo" }, { status: 500 });
+    console.error("Setup API Error:", error);
+    return NextResponse.json({ error: "Failed to set up pipeline" }, { status: 500 });
   }
 }
