@@ -27,15 +27,15 @@ export async function POST(request: Request) {
 
     // 3. Catch and log any database errors
     if (error) {
-      console.error("❌ SUPABASE INSERT ERROR:", error);
+      console.error("SUPABASE INSERT ERROR:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    console.log("✅ Successfully saved to database!", data);
+    console.log("Successfully saved to database!", data);
     return NextResponse.json({ success: true });
 
   } catch (err) {
-    console.error("❌ SERVER ERROR:", err);
+    console.error("SERVER ERROR:", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

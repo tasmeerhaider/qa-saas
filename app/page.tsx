@@ -3,8 +3,9 @@
 import { supabase } from "@/utils/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import styles from "./page.module.css"; // <-- Import the CSS Module
 
-export default function home () {
+export default function Home() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
@@ -26,25 +27,23 @@ export default function home () {
     await supabase.auth.signInWithOAuth({
       provider: "github",
       options: { 
-        redirectTo: `${window.location.origin}/dashboard`,
-        scopes: "repo"
+        scopes: "repo workflow",
+        redirectTo: `${window.location.origin}/dashboard`
       },
     });
   };
 
-  if (loading) return <div className="p-10 text-center">Loading...</div>;
+  if (loading) return <div>Loading...</div>;
 
-  return (<main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-50">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-        <h1 className="text-3xl font-bold mb-2">QA Automator</h1>
-        <p className="text-gray-500 mb-8">Zero-config Playwright testing for your GitHub repos.</p>
-        <button 
-          onClick={handleLogin}
-          className="w-full bg-black text-white rounded-lg px-4 py-3 font-medium hover:bg-gray-800 transition-colors"
-        >
+  return (
+    <main className={styles.mainContainer}>
+      <div className={styles.loginCard}>
+        <h1 className={styles.title}>QA Automator</h1>
+        <p className={styles.subtitle}>Zero-config Playwright testing for your GitHub repos.</p>
+        <button className={styles.loginBtn} onClick={handleLogin}>
           Sign in with GitHub
         </button>
-      </div>
+      </div> 
     </main>
   );
 }

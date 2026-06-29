@@ -1,33 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/utils/supabase/client";
+import Link from "next/link";
+import styles from "./configure.module.css"; // <-- Importing the CSS Module
 
 export default function ConfigureTestsPage() {
-  // 1. Target & Repository State
   const [repoOwner, setRepoOwner] = useState("");
   const [repoName, setRepoName] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
 
-  // 2. Test Configuration State
+  const [githubRepos, setGithubRepos] = useState<any[]>([]);
+  const [isLoadingRepos, setIsLoadingRepos] = useState(true);
+
   const [titleCheck, setTitleCheck] = useState({ enabled: true, expectedTitle: "" });
   const [mobileCheck, setMobileCheck] = useState({ enabled: false, width: 390, height: 844 });
   const [consoleCheck, setConsoleCheck] = useState(false);
   const [networkCheck, setNetworkCheck] = useState(false);
 
-  // 3. UI State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [providerToken, setProviderToken] = useState("");
+
+  useEffect(() => {
+    // Note: If you used Option 1 for the document.title, keep it here!
+
+    const loadRepos = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.provider_token) {
+        try {
+          setProviderToken(session.provider_token);
+          const repoResponse = await fetch('https://api.github.com/user/repos?sort=updated&per_page=50', {
+            headers: {
+              Authorization: `Bearer ${session.provider_token}`,
+              Accept: 'application/vnd.github.v3+json'
+            }
+          });
+          const repos = await repoResponse.json();
+          if (Array.isArray(repos)) {
+            setGithubRepos(repos);
+          }
+        } catch (error) {
+          console.error("Failed to fetch repos", error);
+        } finally {
+          setIsLoadingRepos(false);
+        }
+      } else {
+        setIsLoadingRepos(false);
+      }
+    };
+
+    loadRepos();
+  }, []);
 
   const handleRunTests = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setMessage("Compiling and injecting tests...");
 
-    // Build the exact payload our API expects
     const payload = {
       repoOwner,
       repoName,
       targetUrl,
+      providerToken,
       checks: {
         titleCheck,
         mobileCheck,
@@ -44,126 +80,128 @@ export default function ConfigureTestsPage() {
       });
 
       if (response.ok) {
-        setMessage("✅ Pipeline successfully injected! Tests are running on GitHub.");
+        setMessage("Pipeline successfully injected! Tests are running on GitHub.");
       } else {
-        setMessage("❌ Failed to inject pipeline. Check your console.");
+        setMessage("Failed to inject pipeline. Check your console.");
       }
     } catch (error) {
       console.error(error);
-      setMessage("❌ Network error occurred.");
+      setMessage("Network error occurred.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-2">QA Test Configurator</h1>
-      <p className="text-gray-600 mb-8">Build your automated testing suite without writing code.</p>
+    <div className={styles.configWrapper}>
 
-      <form onSubmit={handleRunTests} className="space-y-8">
-        
+      <Link href="/dashboard" className={styles.backLink}>
+        Back to Dashboard
+      </Link>
+
+      <h1 className={styles.pageTitle}>QA Test Configurator</h1>
+      <p className={styles.pageDesc}>Build your automated testing suite without writing code.</p>
+
+      <form onSubmit={handleRunTests}>
+
         {/* --- SECTION 1: TARGET INFO --- */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h2 className="text-xl font-semibold mb-4">Target Information</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Live Target URL</label>
-              <input 
-                type="url" 
-                required 
+        <div className={styles.formSection}>
+          <h2>Target Information</h2>
+          <div>
+            <div className={styles.inputGroup}>
+              <label>Select GitHub Repository</label>
+              <select
+                required
+                disabled={isLoadingRepos}
+                className={styles.selectField}
+                onChange={(e) => {
+                  const [owner, name] = e.target.value.split('/');
+                  setRepoOwner(owner);
+                  setRepoName(name);
+                }}
+              >
+                <option value="">
+                  {isLoadingRepos ? "Loading your repositories..." : "Choose a repository..."}
+                </option>
+                {githubRepos.map((repo) => (
+                  <option key={repo.id} value={repo.full_name}>
+                    {repo.full_name} {repo.private ? ' 🔒' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.inputGroup}>
+              <label>Live Target URL</label>
+              <input
+                type="url"
+                required
                 placeholder="https://tasmeerhaider.github.io/portfolio"
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                className={styles.inputField}
                 value={targetUrl}
                 onChange={(e) => setTargetUrl(e.target.value)}
               />
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">GitHub Owner</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="tasmeerhaider"
-                  className="w-full p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"
-                  value={repoOwner}
-                  onChange={(e) => setRepoOwner(e.target.value)}
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Repository Name</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="portfolio"
-                  className="w-full p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"
-                  value={repoName}
-                  onChange={(e) => setRepoName(e.target.value)}
-                />
-              </div>
             </div>
           </div>
         </div>
 
         {/* --- SECTION 2: TEST MODULES --- */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h2 className="text-xl font-semibold mb-4">Select Test Modules</h2>
-          
-          <div className="space-y-6">
-            
+        <div className={styles.formSection}>
+          <h2>Select Test Modules</h2>
+
+          <div>
+
             {/* Title Check Module */}
-            <div className="border-b pb-4">
-              <label className="flex items-center space-x-3 cursor-pointer mb-2">
-                <input 
-                  type="checkbox" 
+            <div className={styles.checkboxRow}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
                   checked={titleCheck.enabled}
-                  onChange={(e) => setTitleCheck({...titleCheck, enabled: e.target.checked})}
-                  className="h-5 w-5 text-blue-600 rounded"
+                  onChange={(e) => setTitleCheck({ ...titleCheck, enabled: e.target.checked })}
                 />
-                <span className="font-medium text-gray-900">Verify Page Title</span>
+                <span className={styles.checkboxTitle}>Verify Page Title</span>
               </label>
               {titleCheck.enabled && (
-                <div className="ml-8 mt-2">
-                  <input 
-                    type="text" 
+                <div className={styles.nestedInputs}>
+                  <input
+                    type="text"
                     placeholder="Expected Title (e.g., My Portfolio)"
-                    className="w-full p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className={styles.inputField}
                     value={titleCheck.expectedTitle}
-                    onChange={(e) => setTitleCheck({...titleCheck, expectedTitle: e.target.value})}
+                    onChange={(e) => setTitleCheck({ ...titleCheck, expectedTitle: e.target.value })}
                   />
                 </div>
               )}
             </div>
 
             {/* Mobile Check Module */}
-            <div className="border-b pb-4">
-              <label className="flex items-center space-x-3 cursor-pointer mb-2">
-                <input 
-                  type="checkbox" 
+            <div className={styles.checkboxRow}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
                   checked={mobileCheck.enabled}
-                  onChange={(e) => setMobileCheck({...mobileCheck, enabled: e.target.checked})}
-                  className="h-5 w-5 text-blue-600 rounded"
+                  onChange={(e) => setMobileCheck({ ...mobileCheck, enabled: e.target.checked })}
                 />
-                <span className="font-medium text-gray-900">Mobile Responsiveness Check</span>
+                <span className={styles.checkboxTitle}>Mobile Responsiveness Check</span>
               </label>
               {mobileCheck.enabled && (
-                <div className="ml-8 flex gap-4 mt-2">
-                  <div>
-                    <label className="text-xs text-gray-500 block">Width (px)</label>
-                    <input 
-                      type="number" 
-                      className="w-24 p-2 border rounded text-sm outline-none"
+                <div className={styles.nestedInputs}>
+                  <div className={styles.inputGroup} style={{ marginBottom: 0 }}>
+                    <label>Width (px)</label>
+                    <input
+                      type="number"
+                      className={styles.inputField}
                       value={mobileCheck.width}
-                      onChange={(e) => setMobileCheck({...mobileCheck, width: parseInt(e.target.value)})}
+                      onChange={(e) => setMobileCheck({ ...mobileCheck, width: parseInt(e.target.value) })}
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block">Height (px)</label>
-                    <input 
-                      type="number" 
-                      className="w-24 p-2 border rounded text-sm outline-none"
+                  <div className={styles.inputGroup} style={{ marginBottom: 0 }}>
+                    <label>Height (px)</label>
+                    <input
+                      type="number"
+                      className={styles.inputField}
                       value={mobileCheck.height}
-                      onChange={(e) => setMobileCheck({...mobileCheck, height: parseInt(e.target.value)})}
+                      onChange={(e) => setMobileCheck({ ...mobileCheck, height: parseInt(e.target.value) })}
                     />
                   </div>
                 </div>
@@ -171,33 +209,31 @@ export default function ConfigureTestsPage() {
             </div>
 
             {/* Console Error Scraper */}
-            <div className="border-b pb-4">
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
+            <div className={styles.checkboxRow}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
                   checked={consoleCheck}
                   onChange={(e) => setConsoleCheck(e.target.checked)}
-                  className="h-5 w-5 text-blue-600 rounded"
                 />
-                <div>
-                  <span className="font-medium text-gray-900 block">Console Error Scraper</span>
-                  <span className="text-sm text-gray-500">Fail test if JavaScript errors are found in the browser console.</span>
+                <div className={styles.checkboxText}>
+                  <span className={styles.checkboxTitle}>Console Error Scraper</span>
+                  <span className={styles.checkboxDesc}>Fail test if JavaScript errors are found in the browser console.</span>
                 </div>
               </label>
             </div>
 
             {/* Network/Broken Image Scanner */}
-            <div>
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
+            <div className={styles.checkboxRow} style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 0 }}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
                   checked={networkCheck}
                   onChange={(e) => setNetworkCheck(e.target.checked)}
-                  className="h-5 w-5 text-blue-600 rounded"
                 />
-                <div>
-                  <span className="font-medium text-gray-900 block">Broken Image / Network Scanner</span>
-                  <span className="text-sm text-gray-500">Fail test if any 404s or broken assets are detected.</span>
+                <div className={styles.checkboxText}>
+                  <span className={styles.checkboxTitle}>Broken Image / Network Scanner</span>
+                  <span className={styles.checkboxDesc}>Fail test if any 404s or broken assets are detected.</span>
                 </div>
               </label>
             </div>
@@ -206,26 +242,23 @@ export default function ConfigureTestsPage() {
         </div>
 
         {/* --- SUBMIT BUTTON --- */}
-        <div className="flex items-center justify-between">
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            className={`px-8 py-3 rounded-lg font-bold text-white transition-all ${isSubmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-md'}`}
+        <div className={styles.submitWrapper}>
+          <button
+            type="submit"
+            className={styles.submitBtn}
+            disabled={isSubmitting || !repoName}
           >
             {isSubmitting ? "Compiling..." : "Run Selected Tests"}
           </button>
-          
+
           {message && (
-            <span className={`font-medium ${message.includes("✅") ? "text-green-600" : "text-red-600"}`}>
+            <span className={styles.statusMessage} style={{ color: message.includes("Pipeline") ? "#15803d" : "#b91c1c" }}>
               {message}
             </span>
           )}
         </div>
-
       </form>
+
     </div>
   );
 }
-
-
-

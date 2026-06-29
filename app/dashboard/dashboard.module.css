@@ -1,0 +1,191 @@
+.dashboardWrapper {
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.dashboardContainer {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.signOutBtn {
+  background-color: #ef4444;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  border: none;
+  color: #ffffff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.signOutBtn:hover {
+  background-color: #f01818;
+}
+
+.card {
+  background-color: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.routerCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.routerCard h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+}
+
+.routerCard p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.primaryLink {
+  background-color: #457aec;
+  color: white;
+  text-decoration: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.primaryLink:hover {
+  background-color: #1d4ed8;
+}
+
+.tableHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.refreshBtn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.refreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tableWrapper {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.tableWrapper table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.tableWrapper th {
+  background-color: #f9fafb;
+  padding: 1rem;
+  font-weight: 500;
+  color: #4b5563;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tableWrapper td {
+  padding: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  color: #111827;
+}
+
+.statusBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.statusPassed {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.statusFailed {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.logLink {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.logLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .dashboardWrapper {
+    padding: 1rem;
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+  }
+
+  .routerCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .primaryLink {
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .tableHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* Enables horizontal scrolling for the table */
+  .tableWrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
